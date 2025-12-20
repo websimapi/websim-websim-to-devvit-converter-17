@@ -11,17 +11,6 @@ Devvit.configure({
   realtime: true,
 });
 
-// Robust retry for server calls
-async function retry(operation, retries = 3, delay = 200) {
-  try {
-    return await operation();
-  } catch (err) {
-    if (retries <= 0) throw err;
-    await new Promise(resolve => setTimeout(resolve, delay));
-    return retry(operation, retries - 1, delay * 2);
-  }
-}
-
 Devvit.addCustomPostType({
   name: 'WebSim Game',
   height: 'tall',
@@ -90,11 +79,11 @@ Devvit.addCustomPostType({
               // A. Database Operations (Direct Redis Access)
               if (type === 'db_op') {
                 try {
-                  // Retry writes to ensure persistence
+                  // Database Write
                   if (payload.cmd === 'create' || payload.cmd === 'update') {
-                    await retry(() => context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) }));
+                    await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
                   } else if (payload.cmd === 'delete') {
-                    await retry(() => context.redis.hDel(redisKey, [payload.data.id]));
+                    await context.redis.hDel(redisKey, [payload.data.id]);
                   }
                   
                   // Broadcast change via Realtime
@@ -116,7 +105,7 @@ Devvit.addCustomPostType({
               else if (type === 'db_load') {
                 try {
                   // console.log(\`[Redis] Loading \${payload.collection}...\`);
-                  const data = await retry(() => context.redis.hGetAll(redisKey));
+                  const data = await context.redis.hGetAll(redisKey);
                   const count = data ? Object.keys(data).length : 0;
                   console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
                   
@@ -130,6 +119,7 @@ Devvit.addCustomPostType({
                   }));
                 } catch (e) {
                   console.error('[Redis] Load Error:', e);
+                  if (e.stack) console.error(e.stack);
                   // Return empty to unblock client
                   context.ui.webView.postMessage('gameview', JSON.stringify({
                     type: 'WEBSIM_SOCKET_EVT',
