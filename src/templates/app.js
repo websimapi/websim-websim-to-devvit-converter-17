@@ -74,7 +74,8 @@ Devvit.addCustomPostType({
             // 1. Handle Socket/Redis messages
             if (msg.type === 'WEBSIM_SOCKET_MSG') {
               const { type, payload } = msg.payload || {};
-              const redisKey = \`websim:data:\${payload.collection}\`;
+              const collectionName = payload.collection || 'default';
+              const redisKey = \`websim:data:\${collectionName}\`;
 
               // A. Database Operations (Direct Redis Access)
               if (type === 'db_op') {
@@ -107,13 +108,13 @@ Devvit.addCustomPostType({
                   // console.log(\`[Redis] Loading \${payload.collection}...\`);
                   const data = await context.redis.hGetAll(redisKey);
                   const count = data ? Object.keys(data).length : 0;
-                  console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
+                  console.log(\`[Redis] Persistent Storage: Loaded \${count} records for \${collectionName}\`);
                   
                   context.ui.webView.postMessage('gameview', JSON.stringify({
                     type: 'WEBSIM_SOCKET_EVT',
                     payload: {
                       type: 'db_dump',
-                      collection: payload.collection,
+                      collection: collectionName,
                       data: data || {}
                     }
                   }));

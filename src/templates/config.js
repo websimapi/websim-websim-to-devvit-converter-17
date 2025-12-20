@@ -32,7 +32,7 @@ version: 0.1.0
 
 export const generateViteConfig = ({ hasReact = false, hasRemotion = false } = {}) => `
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+${hasReact ? "import react from '@vitejs/plugin-react';" : ""}
 
 export default defineConfig({
   mode: 'production',
