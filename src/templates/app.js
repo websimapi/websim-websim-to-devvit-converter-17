@@ -35,7 +35,7 @@ Devvit.addCustomPostType({
       <vstack height="100%" width="100%" alignment="center middle">
         <webview
           id="gameview"
-          url="${webviewPath}"
+          url="index.html"
           width="100%"
           height="100%"
           key={key.toString()}

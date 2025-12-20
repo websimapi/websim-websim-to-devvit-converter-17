@@ -6,7 +6,7 @@ import {
 
 import {
     generatePackageJson,
-    generateDevvitJson,
+    generateDevvitYaml,
     generateViteConfig,
     tsConfig,
     getMainTsx,
@@ -23,9 +23,13 @@ import {
 export async function generateDevvitZip(projectMeta, assets, includeReadme = true) {
     const zip = new JSZip();
     
-    const safeId = projectMeta.project.id ? projectMeta.project.id.slice(0, 6) : '000000';
-    const rawSlug = projectMeta.project.slug || "websim-game";
-    const projectSlug = cleanName(`${rawSlug}-${safeId}`);
+    const safeId = projectMeta.project.id ? projectMeta.project.id.slice(0, 4) : '0000';
+    const rawSlug = cleanName(projectMeta.project.slug || "websim-game");
+    // Ensure total length <= 16 for Reddit App Name requirements
+    // Format: slug-id (e.g. game-1234)
+    // 16 - 1 (hyphen) - 4 (id) = 11 chars max for slug
+    const truncatedSlug = rawSlug.slice(0, 11);
+    const projectSlug = `${truncatedSlug}-${safeId}`;
     const projectTitle = projectMeta.project.title || "WebSim Game";
 
     // Initialize Analyzer
@@ -87,7 +91,7 @@ export async function generateDevvitZip(projectMeta, assets, includeReadme = tru
     }
 
     zip.file("package.json", generatePackageJson(projectSlug, analyzer.dependencies, extraDevDeps));
-    zip.file("devvit.json", generateDevvitJson(projectSlug));
+    zip.file("devvit.yaml", generateDevvitYaml(projectSlug));
     zip.file("vite.config.js", generateViteConfig({ hasReact, hasRemotion }));
     zip.file("tsconfig.json", tsConfig);
     zip.file(".gitignore", "node_modules\n.devvit\nwebroot/assets"); // Ignore build artifacts if needed

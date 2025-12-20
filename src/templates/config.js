@@ -26,15 +26,9 @@ export const generatePackageJson = (slug, dependencies = {}, devDependencies = {
   }
 }, null, 2);
 
-export const generateDevvitJson = (slug) => JSON.stringify({
-  name: slug,
-  version: "0.1.0",
-  webroot: "webroot",
-  permissions: [
-    "redis",
-    "realtime"
-  ]
-}, null, 2);
+export const generateDevvitYaml = (slug) => `name: ${slug}
+version: 0.1.0
+`;
 
 export const generateViteConfig = ({ hasReact = false, hasRemotion = false } = {}) => `
 import { defineConfig } from 'vite';
