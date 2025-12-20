@@ -445,6 +445,7 @@ class WebsimSocket {
 
 // Singleton Instance
 const socket = new WebsimSocket();
+window.websimSocketInstance = socket;
 
 WebsimSocket.updateIdentity = (user) => {
     if (!user || !_peers[_clientId]) return;
@@ -522,6 +523,23 @@ export const websimStubsJs = `
             id: 'local_project',
             title: 'Local Game'
         }),
+        // Map websim.collection to the socket-based redis collection
+        collection: (name) => {
+            const sock = window.websimSocketInstance || (window.party) || new window.WebsimSocket();
+            if (sock && sock.collection) {
+                return sock.collection(name);
+            }
+            console.warn('[WebSim Stub] Could not resolve socket for collection:', name);
+            // Fallback mock to prevent crash
+            return { 
+                subscribe:()=>{}, 
+                getList:()=>[], 
+                create:async()=>{}, 
+                update:async()=>{}, 
+                delete:async()=>{},
+                filter: () => ({ subscribe:()=>{}, getList:()=>[] })
+            };
+        },
         // Polyfill upload to prevent crashes
         upload: async (blob) => {
             console.warn('[WebSim Stub] window.websim.upload called. Uploads are not fully supported in WebView.');
@@ -582,5 +600,6 @@ export default w;
 export const getProject = w.getProject;
 export const getCurrentUser = w.getCurrentUser;
 export const upload = w.upload;
+export const collection = w.collection;
 `;
 

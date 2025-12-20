@@ -100,6 +100,8 @@ export class AssetAnalyzer {
         // 5. Bare Specifiers (Import Maps / Node Resolution)
         // If it looks like a package name (no path separators, not a URL), add to dependencies.
         if (!source.match(/^https?:/)) {
+            if (source === 'websim') return 'websim'; // Handled by Vite alias, do not add to dependencies
+
             // Handle scoped packages (@org/pkg) or regular (pkg) potentially followed by /path
             const bareMatch = source.match(/^(@[^/]+\/[^/]+|[^/]+)/);
             if (bareMatch) {

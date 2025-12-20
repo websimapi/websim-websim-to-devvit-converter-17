@@ -119,6 +119,9 @@ Devvit.addCustomPostType({
                   (async () => {
                     try {
                       const data = await context.redis.hGetAll(redisKey);
+                      const count = data ? Object.keys(data).length : 0;
+                      console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
+                      
                       // Send back to THIS client only
                       context.ui.webView.postMessage('gameview', JSON.stringify({
                         type: 'WEBSIM_SOCKET_EVT',
@@ -139,8 +142,9 @@ Devvit.addCustomPostType({
                try {
                    await channel.send(msg.payload);
                } catch (e) {
-                   // Ignore not connected errors
-                   if (!String(e).includes('not connected')) {
+                   // Ignore not connected errors (common during startup)
+                   const errStr = String(e).toLowerCase();
+                   if (!errStr.includes('not connected') && !errStr.includes('closed')) {
                        console.warn('Realtime relay failed:', e);
                    }
                }
