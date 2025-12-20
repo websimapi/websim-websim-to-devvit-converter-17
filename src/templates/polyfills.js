@@ -446,6 +446,12 @@ class WebsimSocket {
 // Singleton Instance
 const socket = new WebsimSocket();
 
+WebsimSocket.updateIdentity = (user) => {
+    if (!user || !_peers[_clientId]) return;
+    _peers[_clientId].username = user.username;
+    _peers[_clientId].avatarUrl = user.avatar_url;
+};
+
 // Expose Global (WebSim Standard)
 window.WebsimSocket = WebsimSocket;
 
@@ -466,13 +472,52 @@ export default socket;
 export const websimStubsJs = `
 // WebSim API Stubs for standalone running
 (function() {
+    // Identity Cache
+    let _currentUser = null;
+
+    // Listen for identity from Devvit Parent
+    window.addEventListener('message', (e) => {
+        let data = e.data;
+        if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) {} }
+        
+        if (data && data.type === 'set_user_context') {
+            console.log('[WebSim] Identity received:', data.payload.username);
+            _currentUser = data.payload;
+            
+            // Also update socket identity if available
+            if (window.WebsimSocket && window.WebsimSocket.updateIdentity) {
+                window.WebsimSocket.updateIdentity(_currentUser);
+            }
+        }
+    });
+
+    // Request identity immediately
+    if (window.parent) {
+        window.parent.postMessage(JSON.stringify({ type: 'get_user_context' }), '*');
+    }
+
     if (!window.websim) {
       window.websim = {
-        getCurrentUser: async () => ({
-            id: 'user_' + Math.random().toString(36).substr(2,9),
-            username: 'Player',
-            avatar_url: 'https://www.redditstatic.com/avatars/avatar_default_02_FF4500.png'
-        }),
+        getCurrentUser: async () => {
+            // Wait a bit for identity handshake if not ready
+            if (!_currentUser) {
+                // Return a temporary promise that checks every 100ms for 1s
+                let attempts = 0;
+                while(!_currentUser && attempts < 10) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+            }
+            // Fallback if still null
+            if (!_currentUser) {
+                _currentUser = {
+                    id: 'user_' + Math.random().toString(36).substr(2,9),
+                    username: 'Guest',
+                    avatar_url: 'https://www.redditstatic.com/avatars/avatar_default_02_FF4500.png'
+                };
+            }
+            return _currentUser;
+        },
         getProject: async () => ({
             id: 'local_project',
             title: 'Local Game'

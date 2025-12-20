@@ -42,10 +42,36 @@ Devvit.addCustomPostType({
           key={key.toString()}
           onMessage={async (event) => {
             // Handle incoming messages from WebView (Client)
-            // Note: msg might be a string or object depending on environment, so we try to parse if string
             let msg = event as any;
             if (typeof msg === 'string') {
                 try { msg = JSON.parse(msg); } catch(e) {}
+            }
+
+            // 0. Handle User Context Request (Identity Handshake)
+            if (msg.type === 'get_user_context') {
+                try {
+                    const currUser = await context.reddit.getCurrentUser();
+                    context.ui.webView.postMessage('gameview', JSON.stringify({
+                        type: 'set_user_context',
+                        payload: {
+                            id: currUser.id,
+                            username: currUser.username,
+                            avatar_url: currUser.snoovatarImage || 'https://www.redditstatic.com/avatars/avatar_default_02_FF4500.png'
+                        }
+                    }));
+                } catch (e) {
+                    console.error('Failed to fetch user context', e);
+                    // Fallback
+                    context.ui.webView.postMessage('gameview', JSON.stringify({
+                        type: 'set_user_context',
+                        payload: {
+                            id: 'anon_' + Math.random().toString(36).substr(2,8),
+                            username: 'Anonymous',
+                            avatar_url: 'https://www.redditstatic.com/avatars/avatar_default_02_FF4500.png'
+                        }
+                    }));
+                }
+                return;
             }
 
             // 1. Handle Realtime Sends from WebView
@@ -54,19 +80,20 @@ Devvit.addCustomPostType({
 
                // A. Database Operations (Redis Bridge)
                if (type === 'db_op') {
-                 // payload: { cmd: 'create'|'update'|'delete', collection: string, data: object }
                  const redisKey = \`websim:data:\${payload.collection}\`;
                  
                  (async () => {
                    try {
+                     // 1. Perform Redis Operation
                      if (payload.cmd === 'create' || payload.cmd === 'update') {
-                        // Store in Redis Hash
                         await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
                      } else if (payload.cmd === 'delete') {
                         await context.redis.hDel(redisKey, [payload.data.id]);
                      }
-                     
-                     // Broadcast change to all clients (Sync) via Realtime
+                     // Log success for debugging confidence
+                     console.log(\`[Redis] \${payload.cmd} success on \${payload.collection}\`);
+
+                     // 2. Broadcast change to other clients
                      try {
                         await channel.send({
                             type: 'db_sync',
@@ -74,16 +101,13 @@ Devvit.addCustomPostType({
                             op: payload 
                         });
                      } catch (sendErr) {
-                         // Swallowing 'not connected' errors during early initialization
-                         // This prevents app crash if the WebView loads faster than Realtime connects
-                         if (String(sendErr).includes('not connected')) {
-                             console.warn('Realtime channel not ready yet. Sync broadcast skipped.');
-                         } else {
-                             throw sendErr;
+                         // Suppress 'not connected' errors during startup
+                         if (!String(sendErr).includes('not connected')) {
+                             console.warn('[Realtime] Sync failed:', sendErr);
                          }
                      }
                    } catch(e) {
-                     console.error('Redis DB Error:', e);
+                     console.error('[Redis] DB Error:', e);
                    }
                  })();
                  return;
