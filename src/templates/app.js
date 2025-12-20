@@ -81,9 +81,7 @@ Devvit.addCustomPostType({
                // A. Database Operations (Redis Bridge)
                if (type === 'db_op') {
                  const redisKey = \`websim:data:\${payload.collection}\`;
-                 
-                 (async () => {
-                   try {
+                 try {
                      // 1. Perform Redis Operation
                      if (payload.cmd === 'create' || payload.cmd === 'update') {
                         await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
@@ -102,22 +100,21 @@ Devvit.addCustomPostType({
                         });
                      } catch (sendErr) {
                          // Suppress 'not connected' errors during startup
-                         if (!String(sendErr).includes('not connected')) {
+                         const errStr = String(sendErr);
+                         if (!errStr.includes('not connected') && !errStr.includes('closed')) {
                              console.warn('[Realtime] Sync failed:', sendErr);
                          }
                      }
-                   } catch(e) {
+                 } catch(e) {
                      console.error('[Redis] DB Error:', e);
-                   }
-                 })();
+                 }
                  return;
                }
 
                // B. Initial Data Load Request
                if (type === 'db_load') {
                   const redisKey = \`websim:data:\${payload.collection}\`;
-                  (async () => {
-                    try {
+                  try {
                       const data = await context.redis.hGetAll(redisKey);
                       const count = data ? Object.keys(data).length : 0;
                       console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
@@ -131,10 +128,9 @@ Devvit.addCustomPostType({
                           data: data || {} 
                         }
                       }));
-                    } catch(e) {
+                  } catch(e) {
                       console.error('Redis Load Error:', e);
-                    }
-                  })();
+                  }
                   return;
                }
 
