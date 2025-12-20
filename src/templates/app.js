@@ -1,3 +1,6 @@
+export const getMainTsx = (title, indexPath) => {
+    const safeTitle = title.replace(/'/g, "\\'");
+    return `
 /** @jsx Devvit.createElement */
 /** @jsxFrag Devvit.Fragment */
 
@@ -28,65 +31,12 @@ Devvit.addCustomPostType({
 
     channel.subscribe();
 
-    // Async Processor for Server-Side Operations (Redis)
-    useAsync(async () => {
-        if (!rpcMessage.msg) return;
-        
-        const { type, payload } = rpcMessage.msg.payload || {};
-
-        // A. Database Operations (Redis Bridge)
-        if (type === 'db_op') {
-            const redisKey = \`websim:data:\${payload.collection}\`;
-            try {
-                if (payload.cmd === 'create' || payload.cmd === 'update') {
-                    await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
-                } else if (payload.cmd === 'delete') {
-                    await context.redis.hDel(redisKey, [payload.data.id]);
-                }
-                
-                // Broadcast change
-                try {
-                    await channel.send({
-                        type: 'db_sync',
-                        collection: payload.collection,
-                        op: payload 
-                    });
-                } catch (e) { /* ignore offline */ }
-                
-                console.log(\`[Redis] \${payload.cmd} success on \${payload.collection}\`);
-            } catch(e) {
-                console.error('[Redis] DB Op Error:', e);
-            }
-        }
-
-        // B. Initial Data Load Request
-        if (type === 'db_load') {
-            const redisKey = \`websim:data:\${payload.collection}\`;
-            try {
-                const data = await context.redis.hGetAll(redisKey);
-                const count = data ? Object.keys(data).length : 0;
-                console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
-                
-                context.ui.webView.postMessage('gameview', JSON.stringify({
-                    type: 'WEBSIM_SOCKET_EVT',
-                    payload: {
-                        type: 'db_dump',
-                        collection: payload.collection,
-                        data: data || {} 
-                    }
-                }));
-            } catch(e) {
-                console.error('[Redis] Load Error:', e);
-            }
-        }
-    }, { depends: [rpcMessage] });
-
     return (
       <vstack height="100%" width="100%" alignment="center middle">
         <webview
           id="gameview"
           grow
-          url="index.html"
+          url="${indexPath}"
           width="100%"
           height="100%"
           key={key.toString()}
@@ -128,7 +78,7 @@ Devvit.addCustomPostType({
 
                // A. Database Operations (Direct Redis Access)
                if (type === 'db_op') {
-                   const redisKey = `websim:data:${payload.collection}`;
+                   const redisKey = \`websim:data:\${payload.collection}\`;
                    try {
                        if (payload.cmd === 'create' || payload.cmd === 'update') {
                            await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
@@ -150,11 +100,11 @@ Devvit.addCustomPostType({
                
                // B. Initial Data Load Request
                else if (type === 'db_load') {
-                   const redisKey = `websim:data:${payload.collection}`;
+                   const redisKey = \`websim:data:\${payload.collection}\`;
                    try {
                        const data = await context.redis.hGetAll(redisKey);
                        const count = data ? Object.keys(data).length : 0;
-                       console.log(`[Redis] Loaded ${count} records for ${payload.collection}`);
+                       console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
                        
                        context.ui.webView.postMessage('gameview', JSON.stringify({
                            type: 'WEBSIM_SOCKET_EVT',
@@ -198,14 +148,14 @@ Devvit.addCustomPostType({
 });
 
 Devvit.addMenuItem({
-  label: 'Create ${title.replace(/'/g, "\\'")}',
+  label: 'Create ${safeTitle}',
   location: 'subreddit',
   onPress: async (_event, context) => {
     const { reddit, ui } = context;
     try {
       const subreddit = await reddit.getCurrentSubreddit();
       const post = await reddit.submitPost({
-        title: '${title.replace(/'/g, "\\'")}',
+        title: '${safeTitle}',
         subredditName: subreddit.name,
         preview: (
           <vstack height="100%" width="100%" alignment="center middle">
@@ -223,5 +173,7 @@ Devvit.addMenuItem({
 });
 
 export default Devvit;
+`;
+};
 `;
 
