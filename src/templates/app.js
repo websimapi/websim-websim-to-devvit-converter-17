@@ -1,7 +1,7 @@
-export const getMainTsx = (title, webviewPath) => `/** @jsx Devvit.createElement */
+/** @jsx Devvit.createElement */
 /** @jsxFrag Devvit.Fragment */
 
-import { Devvit, useState, useChannel, useAsync } from '@devvit/public-api';
+import { Devvit, useState, useChannel } from '@devvit/public-api';
 
 Devvit.configure({
   redditAPI: true,
@@ -14,7 +14,6 @@ Devvit.addCustomPostType({
   height: 'tall',
   render: (context) => {
     const [key, setKey] = useState(0);
-    const [rpcMessage, setRpcMessage] = useState({ id: 0, msg: null });
     
     // Realtime Channel Bridge
     const channel = useChannel({
@@ -123,21 +122,60 @@ Devvit.addCustomPostType({
                 return;
             }
 
-            // 1. Handle Socket/Redis messages -> Offload to Server via State
+            // 1. Handle Socket/Redis messages
             if (msg.type === 'WEBSIM_SOCKET_MSG') {
-               const p = msg.payload || {};
+               const { type, payload } = msg.payload || {};
+
+               // A. Database Operations (Direct Redis Access)
+               if (type === 'db_op') {
+                   const redisKey = `websim:data:${payload.collection}`;
+                   try {
+                       if (payload.cmd === 'create' || payload.cmd === 'update') {
+                           await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
+                       } else if (payload.cmd === 'delete') {
+                           await context.redis.hDel(redisKey, [payload.data.id]);
+                       }
+                       // Broadcast change via Realtime
+                       try {
+                           await channel.send({
+                               type: 'db_sync',
+                               collection: payload.collection,
+                               op: payload 
+                           });
+                       } catch (e) { /* ignore offline */ }
+                   } catch(e) {
+                       console.error('[Redis] DB Op Error:', e);
+                   }
+               }
                
-               // Move DB ops to server-side async hook via state update
-               if (p.type === 'db_op' || p.type === 'db_load') {
-                   setRpcMessage({ id: Math.random(), msg: msg });
-                   return;
+               // B. Initial Data Load Request
+               else if (type === 'db_load') {
+                   const redisKey = `websim:data:${payload.collection}`;
+                   try {
+                       const data = await context.redis.hGetAll(redisKey);
+                       const count = data ? Object.keys(data).length : 0;
+                       console.log(`[Redis] Loaded ${count} records for ${payload.collection}`);
+                       
+                       context.ui.webView.postMessage('gameview', JSON.stringify({
+                           type: 'WEBSIM_SOCKET_EVT',
+                           payload: {
+                               type: 'db_dump',
+                               collection: payload.collection,
+                               data: data || {} 
+                           }
+                       }));
+                   } catch(e) {
+                       console.error('[Redis] Load Error:', e);
+                   }
                }
 
-               // Standard Realtime Relay
-               try {
-                   await channel.send(msg.payload);
-               } catch (e) {
-                   // Suppress 'not connected'
+               // C. Standard Realtime Relay (Broadcast)
+               else {
+                   try {
+                       await channel.send(msg.payload);
+                   } catch (e) {
+                       // Suppress 'not connected' if just broadcasting presence etc
+                   }
                }
             }
             
