@@ -1,5 +1,8 @@
 export const getMainTsx = (title, indexPath) => {
     const safeTitle = title.replace(/'/g, "\\'");
+    // Ensure indexPath is safe (remove quotes/backslashes)
+    const safePath = indexPath.replace(/["'\\]/g, ''); 
+    
     return `
 /** @jsx Devvit.createElement */
 /** @jsxFrag Devvit.Fragment */
@@ -36,12 +39,13 @@ Devvit.addCustomPostType({
         <webview
           id="gameview"
           grow
-          url="${indexPath}"
+          url="${safePath}"
           width="100%"
           height="100%"
           key={key.toString()}
           onMessage={async (event) => {
             let msg = event;
+            // Parse if strictly a string (Android/older clients sometimes stringify twice)
             if (typeof msg === 'string') {
                 try { msg = JSON.parse(msg); } catch(e) {}
             }
@@ -75,21 +79,31 @@ Devvit.addCustomPostType({
             // 1. Handle Socket/Redis messages
             if (msg.type === 'WEBSIM_SOCKET_MSG') {
                const { type, payload } = msg.payload || {};
+               
+               // Avoid processing if payload is missing
+               if (!payload) return;
 
                // A. Database Operations (Direct Redis Access)
                if (type === 'db_op') {
-                   const redisKey = \`websim:data:\${payload.collection}\`;
+                   // Ensure collection is valid string to prevent bad keys
+                   const colName = payload.collection || 'default'; 
+                   const redisKey = \`websim:data:\${colName}\`;
+                   
                    try {
                        if (payload.cmd === 'create' || payload.cmd === 'update') {
-                           await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
+                           if (payload.data && payload.data.id) {
+                               await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
+                           }
                        } else if (payload.cmd === 'delete') {
-                           await context.redis.hDel(redisKey, [payload.data.id]);
+                           if (payload.data && payload.data.id) {
+                               await context.redis.hDel(redisKey, [payload.data.id]);
+                           }
                        }
                        // Broadcast change via Realtime
                        try {
                            await channel.send({
                                type: 'db_sync',
-                               collection: payload.collection,
+                               collection: colName,
                                op: payload 
                            });
                        } catch (e) { /* ignore offline */ }
@@ -100,17 +114,18 @@ Devvit.addCustomPostType({
                
                // B. Initial Data Load Request
                else if (type === 'db_load') {
-                   const redisKey = \`websim:data:\${payload.collection}\`;
+                   const colName = payload.collection || 'default';
+                   const redisKey = \`websim:data:\${colName}\`;
                    try {
                        const data = await context.redis.hGetAll(redisKey);
                        const count = data ? Object.keys(data).length : 0;
-                       console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
+                       console.log(\`[Redis] Loaded \${count} records for \${colName}\`);
                        
                        context.ui.webView.postMessage('gameview', JSON.stringify({
                            type: 'WEBSIM_SOCKET_EVT',
                            payload: {
                                type: 'db_dump',
-                               collection: payload.collection,
+                               collection: colName,
                                data: data || {} 
                            }
                        }));
