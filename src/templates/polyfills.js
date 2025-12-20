@@ -127,10 +127,31 @@ class WebsimCollection {
         this.subs = [];
         this.loaded = false;
         
-        // Request initial load
+        // Request initial load with retry
+        this._requestLoad();
+    }
+
+    _requestLoad(attempt = 0) {
+        // Wait slightly for socket/bridge to stabilize
+        const delay = attempt === 0 ? 1000 : 2000;
+        
         setTimeout(() => {
-            this.socket._sendInternal('db_load', { collection: name });
-        }, 500);
+            if (this.loaded) return;
+            
+            // If still not loaded after a few tries, log warning but keep trying
+            if (attempt > 0 && attempt % 3 === 0) {
+                 console.warn(\`[WebSim Socket] Still waiting for data: \${this.name} (attempt \${attempt})\`);
+            }
+            
+            this.socket._sendInternal('db_load', { collection: this.name });
+            
+            // Schedule retry if not loaded
+            if (attempt < 10) {
+                this._retryTimer = setTimeout(() => {
+                    if (!this.loaded) this._requestLoad(attempt + 1);
+                }, 3000); // 3s timeout for response
+            }
+        }, delay);
     }
 
     getList() {
@@ -236,6 +257,8 @@ class WebsimCollection {
     }
     
     _handleDump(dataMap) {
+        if (this._retryTimer) clearTimeout(this._retryTimer);
+        
         // dataMap is object { id: jsonString }
         this.records = Object.values(dataMap).map(s => {
             try { return typeof s === 'string' ? JSON.parse(s) : s; } catch(e) { return null; }

@@ -11,6 +11,17 @@ Devvit.configure({
   realtime: true,
 });
 
+// Robust retry for server calls
+async function retry(operation, retries = 3, delay = 200) {
+  try {
+    return await operation();
+  } catch (err) {
+    if (retries <= 0) throw err;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return retry(operation, retries - 1, delay * 2);
+  }
+}
+
 Devvit.addCustomPostType({
   name: 'WebSim Game',
   height: 'tall',
@@ -74,16 +85,18 @@ Devvit.addCustomPostType({
             // 1. Handle Socket/Redis messages
             if (msg.type === 'WEBSIM_SOCKET_MSG') {
               const { type, payload } = msg.payload || {};
+              const redisKey = \`websim:data:\${payload.collection}\`;
 
               // A. Database Operations (Direct Redis Access)
               if (type === 'db_op') {
-                const redisKey = \`websim:data:\${payload.collection}\`;
                 try {
+                  // Retry writes to ensure persistence
                   if (payload.cmd === 'create' || payload.cmd === 'update') {
-                    await context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) });
+                    await retry(() => context.redis.hSet(redisKey, { [payload.data.id]: JSON.stringify(payload.data) }));
                   } else if (payload.cmd === 'delete') {
-                    await context.redis.hDel(redisKey, [payload.data.id]);
+                    await retry(() => context.redis.hDel(redisKey, [payload.data.id]));
                   }
+                  
                   // Broadcast change via Realtime
                   try {
                     await channel.send({
@@ -92,18 +105,18 @@ Devvit.addCustomPostType({
                       op: payload
                     });
                   } catch (e) {
-                    // ignore offline
+                    console.log('[Realtime] Broadcast skipped (offline)');
                   }
                 } catch (e) {
-                  console.error('[Redis] DB Op Error:', e);
+                  console.error(\`[Redis] DB Op Error (\${payload.cmd}):\`, e);
                 }
               }
               
               // B. Initial Data Load Request
               else if (type === 'db_load') {
-                const redisKey = \`websim:data:\${payload.collection}\`;
                 try {
-                  const data = await context.redis.hGetAll(redisKey);
+                  // console.log(\`[Redis] Loading \${payload.collection}...\`);
+                  const data = await retry(() => context.redis.hGetAll(redisKey));
                   const count = data ? Object.keys(data).length : 0;
                   console.log(\`[Redis] Loaded \${count} records for \${payload.collection}\`);
                   
@@ -117,6 +130,15 @@ Devvit.addCustomPostType({
                   }));
                 } catch (e) {
                   console.error('[Redis] Load Error:', e);
+                  // Return empty to unblock client
+                  context.ui.webView.postMessage('gameview', JSON.stringify({
+                    type: 'WEBSIM_SOCKET_EVT',
+                    payload: {
+                      type: 'db_dump',
+                      collection: payload.collection,
+                      data: {}
+                    }
+                  }));
                 }
               }
 
@@ -125,7 +147,7 @@ Devvit.addCustomPostType({
                 try {
                   await channel.send(msg.payload);
                 } catch (e) {
-                  // Suppress 'not connected' if just broadcasting presence etc
+                  // Suppress 'not connected'
                 }
               }
             }
