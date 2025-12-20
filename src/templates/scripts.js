@@ -141,13 +141,7 @@ async function checkRemotion() {
     } catch(e) {}
 }
 
-// Cleanup old config if exists to prevent conflicts
-if (fs.existsSync('devvit.yaml')) {
-    try {
-        fs.unlinkSync('devvit.yaml');
-        console.log('cleaned up old devvit.yaml');
-    } catch(e) {}
-}
+
 
 // 1. Check CLI
 try {
