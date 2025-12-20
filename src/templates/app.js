@@ -66,11 +66,21 @@ Devvit.addCustomPostType({
                      }
                      
                      // Broadcast change to all clients (Sync) via Realtime
-                     await channel.send({
-                        type: 'db_sync',
-                        collection: payload.collection,
-                        op: payload 
-                     });
+                     try {
+                        await channel.send({
+                            type: 'db_sync',
+                            collection: payload.collection,
+                            op: payload 
+                        });
+                     } catch (sendErr) {
+                         // Swallowing 'not connected' errors during early initialization
+                         // This prevents app crash if the WebView loads faster than Realtime connects
+                         if (String(sendErr).includes('not connected')) {
+                             console.warn('Realtime channel not ready yet. Sync broadcast skipped.');
+                         } else {
+                             throw sendErr;
+                         }
+                     }
                    } catch(e) {
                      console.error('Redis DB Error:', e);
                    }
@@ -101,7 +111,14 @@ Devvit.addCustomPostType({
                }
 
                // C. Standard Realtime Relay
-               channel.send(msg.payload);
+               try {
+                   await channel.send(msg.payload);
+               } catch (e) {
+                   // Ignore not connected errors
+                   if (!String(e).includes('not connected')) {
+                       console.warn('Realtime relay failed:', e);
+                   }
+               }
             }
             
             // 2. Handle Console Logs

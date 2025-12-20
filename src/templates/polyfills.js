@@ -128,7 +128,9 @@ class WebsimCollection {
         this.loaded = false;
         
         // Request initial load
-        this.socket._sendInternal('db_load', { collection: name });
+        setTimeout(() => {
+            this.socket._sendInternal('db_load', { collection: name });
+        }, 500);
     }
 
     getList() {
@@ -306,11 +308,13 @@ class WebsimSocket {
         console.log('[WebSim Socket] Connecting to room...');
         this.connected = true;
         
-        // Announce join to peers
-        this._sendInternal('join', { 
-            username: this.peers[this.clientId].username,
-            avatarUrl: this.peers[this.clientId].avatarUrl
-        });
+        // Delay join slightly to ensure server channel is ready
+        setTimeout(() => {
+            this._sendInternal('join', { 
+                username: this.peers[this.clientId].username,
+                avatarUrl: this.peers[this.clientId].avatarUrl
+            });
+        }, 1000);
         
         return Promise.resolve();
     }

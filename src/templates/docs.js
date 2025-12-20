@@ -35,5 +35,10 @@ Converted from WebSim: ${url}
 
 To modify the game, edit files in \`webroot/\`.
 To modify the Reddit app wrapper, edit \`src/main.tsx\`.
+
+## Feedback & Debugging
+
+If you encounter bugs, please include the full logs from the terminal in your report.
+If the AI needs to investigate specific files, it will ask for them here.
 `;
 
