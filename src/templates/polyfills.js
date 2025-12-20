@@ -482,6 +482,11 @@ export const websimStubsJs = `
             console.warn('[WebSim Stub] window.websim.upload called. Uploads are not fully supported in WebView.');
             // Return a local Blob URL to satisfy the promise (image will display, but won't persist)
             return URL.createObjectURL(blob);
+        },
+        // Generic internal stubs
+        internal: {
+            // Helper to detect if running in Devvit
+            isDevvit: true
         }
       };
     }

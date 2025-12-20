@@ -128,8 +128,11 @@ export class AssetAnalyzer {
 
     // Rewrites JS imports to use NPM packages
     processJS(jsContent, filename = 'script.js') {
-        const code = uint8ToString(jsContent);
+        let code = uint8ToString(jsContent);
         
+        // Generic WebSim URL Replacements (Fix CSP issues)
+        code = code.replace(/https:\/\/images\.websim\.ai\/avatar\/|https:\/\/images\.websim\.com\/avatar\//g, 'https://www.redditstatic.com/avatars/avatar_default_02_FF4500.png?user=');
+
         // Calculate relative path to root for asset corrections
         const depth = (filename.match(/\//g) || []).length;
         const rootPrefix = depth > 0 ? '../'.repeat(depth) : './';

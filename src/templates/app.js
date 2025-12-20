@@ -35,11 +35,12 @@ Devvit.addCustomPostType({
       <vstack height="100%" width="100%" alignment="center middle">
         <webview
           id="gameview"
+          grow
           url="index.html"
           width="100%"
           height="100%"
           key={key.toString()}
-          onMessage={(event) => {
+          onMessage={async (event) => {
             // Handle incoming messages from WebView (Client)
             // Note: msg might be a string or object depending on environment, so we try to parse if string
             let msg = event as any;
